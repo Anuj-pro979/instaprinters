@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Print Service</title>
+    <script src="https://upload-widget.cloudinary.com/latest/global/all.js" type="text/javascript"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <style>
+        body { font-family: sans-serif; }
+        #devices-list { list-style: none; padding: 0; }
+        #devices-list li { margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Print Service</h1>
+
+    <h2>Select a Printer</h2>
+    <ul id="devices-list">
+        <!-- Device list will be populated here -->
+    </ul>
+
+    <h2>Upload File</h2>
+    <button id="upload_widget">Upload File</button>
+
+    <script>
+        // --- Firebase Configuration ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDqW4Y2YkqD7OniJzHLFj65R5iJxgGU_fc",
+            authDomain: "arthydro-ebcb8.firebaseapp.com",
+            databaseURL: "https://arthydro-ebcb8-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "arthydro-ebcb8",
+            storageBucket: "arthydro-ebcb8.firebasestorage.app",
+            messagingSenderId: "516606331411",
+            appId: "1:516606331411:web:217b34d22eb08324bbcde6",
+            measurementId: "G-4XCX4D7W9L" 
+        };
+
+        // Initialize Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const database = firebase.database(app);
+
+        // --- Cloudinary Configuration ---
+        
+        const cloudName = 'dsdcljy0a';
+        const uploadPreset = 'ml_default';
+
+        let selectedPrinter = null; // To store the selected printer
+        let deviceId = null; // To store the id of the selected printer.
+
+        // --- Function to populate device list ---
+        function populateDeviceList() {
+            const devicesList = document.getElementById('devices-list');
+            devicesList.innerHTML = ''; // Clear existing list
+
+            const devicesRef = database.ref('/devices');
+            devicesRef.once('value', (snapshot) => {
+                const devices = snapshot.val();
+                if (devices) {
+                    for (const deviceId_firebase in devices) {
+                        const device = devices[deviceId_firebase];
+                        const listItem = document.createElement('li');
+                        listItem.textContent = device.name;
+                        listItem.addEventListener('click', () => {
+                            selectedPrinter = device.name; // Set the selected printer name
+                            deviceId = deviceId_firebase;
+                            console.log('Selected printer:', selectedPrinter);
+                            // Optionally provide visual feedback that it's selected
+                            alert(`Selected printer: ${selectedPrinter}`);
+                        });
+                        devicesList.appendChild(listItem);
+                    }
+                }
+            });
+        }
+
+        // --- Initialize Cloudinary Upload Widget ---
+        const uploadWidget = cloudinary.createUploadWidget({
+            cloudName: cloudName,
+            uploadPreset: uploadPreset,
+            sources: ['local', 'url', 'camera'],
+            multiple: false,
+            resourceType: 'auto',
+            clientAllowedFormats: ['image', 'pdf', 'doc', 'docx'],
+            maxFileSize: 10485760 // 10 MB
+        }, (error, result) => {
+            if (!error && result && result.event === "success") {
+                console.log('File uploaded successfully:', result.info);
+                alert('File uploaded successfully!');
+
+                if (selectedPrinter) {
+                    // Store the file in the print queue
+                    const printQueueRef = database.ref(`/print_queue`);
+                    printQueueRef.once('value', (snapshot) => {
+                            const jobs = snapshot.val() || {};
+                            let job_count = 0;
+                            for (const deviceId_firebase in jobs) {
+                                job_count += Object.keys(jobs[deviceId_firebase]).length;
+                            }
+                            job_count++;
+                            const newJobRef = database.ref(`/print_queue/tharun letterr_${job_count}`);
+                            newJobRef.set({
+                                file_url: result.info.secure_url,
+                                printer_name: selectedPrinter,
+                                status: 'pending'
+                            });
+                        });
+                    
+                } else {
+                    alert('Please select a printer before uploading a file.');
+                }
+            }
+        });
+
+        // --- Event listener for upload button ---
+        document.getElementById("upload_widget").addEventListener("click", function(){
+            uploadWidget.open();
+        }, false);
+
+        // --- Initial population of device list ---
+        populateDeviceList();
+    </script>
+</body>
+</html>
